@@ -23,6 +23,7 @@ from electrumx.lib.tx import DeserializerDecred
 from electrumx.lib.util import (class_logger, hex_to_bytes, json_deserialize,
                                 json_serialize, pack_varint,
                                 unpack_le_uint16_from)
+import json
 
 if TYPE_CHECKING:
     from electrumx.lib.coins import Coin

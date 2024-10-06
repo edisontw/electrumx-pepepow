@@ -53,6 +53,17 @@ json_serialize = json.dumps
 
 # Logging utilities
 
+import struct
+
+def unpack_le_uint16(binary, offset):
+    return struct.unpack_from('<H', binary, offset)[0]
+
+def unpack_le_uint32(binary, offset):
+    return struct.unpack_from('<I', binary, offset)[0]
+
+def unpack_le_uint64(binary, offset):
+    return struct.unpack_from('<Q', binary, offset)[0]
+
 
 class ConnectionLogger(logging.LoggerAdapter):
     '''Prepends a connection identifier to a logging message.'''

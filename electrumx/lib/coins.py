@@ -52,7 +52,6 @@ from electrumx.server.session import (ElectrumX, DashElectrumX,
                                       SmartCashElectrumX, AuxPoWElectrumX,
                                       NameIndexElectrumX, NameIndexAuxPoWElectrumX)
 
-
 @dataclass
 class Block:
     __slots__ = "raw", "header", "transactions"
@@ -119,6 +118,10 @@ class Coin:
         '''Return a coin class given name and network.
 
         Raise an exception if unrecognised.'''
+
+        if name == "PEPEPOW" and net == "mainnet":
+            return Pepepow
+
         req_attrs = ('TX_COUNT', 'TX_COUNT_HEIGHT', 'TX_PER_BLOCK')
         for coin in util.subclasses(Coin):
             if (coin.NAME.lower() == name.lower() and
@@ -545,7 +548,6 @@ class PrimeChainPowMixin:
         '''Return the block header bytes'''
         deserializer = cls.DESERIALIZER(block)
         return deserializer.read_header(cls.BASIC_HEADER_SIZE)
-
 
 class Verge(Coin):
     NAME = "Verge"
@@ -2491,6 +2493,129 @@ class AxeRegtest(AxeTestnet):
     TX_COUNT_HEIGHT = 1
     RPC_PORT = 19869
     TX_COUNT = 1
+
+from .tx_pepepow import DeserializerPepepow
+class Pepepow(Dash):
+    NAME = "PEPEPOW"
+    SHORTNAME = "PEPEW"
+    NET = "mainnet"
+    XPUB_VERBYTES = bytes.fromhex("0488b21e")
+    XPRV_VERBYTES = bytes.fromhex("0488ade4")
+    P2PKH_VERBYTE = bytes.fromhex("37")  # PUBKEY_ADDRESS = 55(37)
+    P2SH_VERBYTES = (bytes.fromhex("10"),)  # SCRIPT_ADDRESS = 117(75) 16(=10)?
+    WIF_BYTE = bytes.fromhex("cc")  # SECRET_KEY = 239(ef) 204(=cc)?
+    GENESIS_HASH = '00000a308cc3b469703a3bc1aa55bc251a71c9287d7b413242592c0ab0a31f13'
+#    DESERIALIZER = lib_tx.Deserializer # Using the default deserializer
+#    DESERIALIZER = lib_tx_dash.DeserializerDash
+#    DESERIALIZER = lib_tx_axe.DeserializerAxe
+    DESERIALIZER = DeserializerPepepow
+    TX_COUNT = 1000000  # Total number of transactions, estimated value 
+    TX_COUNT_HEIGHT = 2070401  # Current block height, estimated value
+    TX_PER_BLOCK =3  # Transactions per block, estimated value
+    RPC_PORT = 8332 # RPC service port
+    SESSIONCLS = DashElectrumX
+    DAEMON = daemon.DashDaemon
+#    DAEMON = daemon.LegacyRPCDaemon
+#    DAEMON = daemon.Daemon
+#    DAEMON = PepepowDaemon
+
+    @classmethod
+    def block(cls, raw_block, height):
+        if isinstance(raw_block, str):
+            # Convert hex string to bytes
+            raw_block = bytes.fromhex(raw_block)
+        header = cls.block_header(raw_block, height)
+        print(f"Block height: {height}")
+        print(f"Raw block length: {len(raw_block)}")
+        print(f"Header length: {len(header)}")
+        tx_start = len(header)
+        print(f"Transaction data starts at byte: {tx_start}")
+        tx_data_length = len(raw_block) - tx_start
+        print(f"Transaction data length: {tx_data_length}")
+        txs = cls.DESERIALIZER(raw_block, start=tx_start).read_tx_block()
+        return cls.Block(
+            raw=raw_block,
+            header=header,
+            transactions=txs,
+            block_size=len(raw_block),
+            height=height
+        )
+
+    @classmethod
+    def genesis_block(cls, header):
+        height = 0
+        header_hex_hash = hash_to_hex_str(cls.header_hash(header, height))
+        return header_hex_hash
+
+    @classmethod
+    def header_hash(cls, header, height):
+        if height < 1_930_000:
+            return cls.memehash(header)
+        else:
+            return cls.xelisv2_hash(header)
+
+    @staticmethod
+    def memehash(header):
+        import hashlib
+        import ctypes
+        # Load shared libraries
+        sph_simd = ctypes.CDLL('/home/ubuntu/electrumx-pepepow/electrumx/lib/libsph_simd.so')
+        sph_echo = ctypes.CDLL('/home/ubuntu/electrumx-pepepow/electrumx/lib/libsph_echo.so')
+        sph_cubehash = ctypes.CDLL('/home/ubuntu/electrumx-pepepow/electrumx/lib/libsph_cubehash.so')
+        sph_shavite = ctypes.CDLL('/home/ubuntu/electrumx-pepepow/electrumx/lib/libsph_shavite.so')
+
+        class SPH_SIMD_CTX(ctypes.Structure):
+            _fields_ = [("data", ctypes.c_ubyte * 256)]
+        class SPH_ECHO_CTX(ctypes.Structure):
+            _fields_ = [("data", ctypes.c_ubyte * 256)]
+        class SPH_CUBEHASH_CTX(ctypes.Structure):
+            _fields_ = [("data", ctypes.c_ubyte * 256)]
+        class SPH_SHAVITE_CTX(ctypes.Structure):
+            _fields_ = [("data", ctypes.c_ubyte * 256)]
+
+        ctx_simd = SPH_SIMD_CTX()
+        ctx_echo = SPH_ECHO_CTX()
+        ctx_cubehash = SPH_CUBEHASH_CTX()
+        ctx_shavite = SPH_SHAVITE_CTX()
+
+        # Step 1: BLAKE-512
+        hash1 = hashlib.blake2b(header, digest_size=64).digest()
+
+        # Steps 2-5: Apply other hash functions using ctypes
+        # SIMD-512
+#        hash2 = bytearray(64)
+        hash2 = (ctypes.c_ubyte * 64)()
+        sph_simd.sph_simd512_init(ctypes.byref(ctx_simd))
+        sph_simd.sph_simd512(ctypes.byref(ctx_simd), hash1, len(hash1))
+        sph_simd.sph_simd512_close(ctypes.byref(ctx_simd), hash2)
+        # ECHO-512
+        hash3 = (ctypes.c_ubyte * 64)()
+        sph_echo.sph_echo512_init(ctypes.byref(ctx_echo))
+        sph_echo.sph_echo512(ctypes.byref(ctx_echo), hash2, len(hash2))
+        sph_echo.sph_echo512_close(ctypes.byref(ctx_echo), hash3)
+        # CubeHash-512
+        hash4 = (ctypes.c_ubyte * 64)()
+        sph_cubehash.sph_cubehash512_init(ctypes.byref(ctx_cubehash))
+        sph_cubehash.sph_cubehash512(ctypes.byref(ctx_cubehash), hash3, len(hash3))
+        sph_cubehash.sph_cubehash512_close(ctypes.byref(ctx_cubehash), hash4)
+        # SHAvite-512
+        hash5 = (ctypes.c_ubyte * 64)()
+        sph_shavite.sph_shavite512_init(ctypes.byref(ctx_shavite))
+        sph_shavite.sph_shavite512(ctypes.byref(ctx_shavite), hash4, len(hash4))
+        sph_shavite.sph_shavite512_close(ctypes.byref(ctx_shavite), hash5)    
+
+        # Steps 6-8: SHA-256 (three times)
+        hash6 = hashlib.sha256(bytes(hash5)).digest()
+        hash7 = hashlib.sha256(hash6).digest()
+        hash8 = hashlib.sha256(hash7).digest()
+
+        return hash8
+
+    @staticmethod
+    def xelisv2_hash(header):
+        # Implement the XelisV2 hash function here
+        pass
+
 
 
 class Xuez(Coin):
