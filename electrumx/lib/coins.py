@@ -2502,36 +2502,27 @@ class Pepepow(Dash):
     XPUB_VERBYTES = bytes.fromhex("0488b21e")
     XPRV_VERBYTES = bytes.fromhex("0488ade4")
     P2PKH_VERBYTE = bytes.fromhex("37")  # PUBKEY_ADDRESS = 55(37)
-    P2SH_VERBYTES = (bytes.fromhex("10"),)  # SCRIPT_ADDRESS = 117(75) 16(=10)?
-    WIF_BYTE = bytes.fromhex("cc")  # SECRET_KEY = 239(ef) 204(=cc)?
+    P2SH_VERBYTES = (bytes.fromhex("10"),)  # SCRIPT_ADDRESS = 117(75)
+    WIF_BYTE = bytes.fromhex("cc")  # SECRET_KEY = 239(ef)
     GENESIS_HASH = '00000a308cc3b469703a3bc1aa55bc251a71c9287d7b413242592c0ab0a31f13'
-#    DESERIALIZER = lib_tx.Deserializer # Using the default deserializer
-#    DESERIALIZER = lib_tx_dash.DeserializerDash
-#    DESERIALIZER = lib_tx_axe.DeserializerAxe
     DESERIALIZER = DeserializerPepepow
-    TX_COUNT = 1000000  # Total number of transactions, estimated value 
+    TX_COUNT = 1000000  # Total number of transactions, estimated value
     TX_COUNT_HEIGHT = 2070401  # Current block height, estimated value
-    TX_PER_BLOCK =3  # Transactions per block, estimated value
-    RPC_PORT = 8332 # RPC service port
+    TX_PER_BLOCK = 3  # Transactions per block, estimated value
+    RPC_PORT = 8332  # RPC service port
     SESSIONCLS = DashElectrumX
     DAEMON = daemon.DashDaemon
-#    DAEMON = daemon.LegacyRPCDaemon
-#    DAEMON = daemon.Daemon
-#    DAEMON = PepepowDaemon
 
     @classmethod
     def block(cls, raw_block, height):
         if isinstance(raw_block, str):
-            # Convert hex string to bytes
             raw_block = bytes.fromhex(raw_block)
+        if len(raw_block) < 80:
+            raise ValueError(f"Block data is too short to contain a valid header, block height: {height}")
         header = cls.block_header(raw_block, height)
-        print(f"Block height: {height}")
-        print(f"Raw block length: {len(raw_block)}")
-        print(f"Header length: {len(header)}")
         tx_start = len(header)
-        print(f"Transaction data starts at byte: {tx_start}")
-        tx_data_length = len(raw_block) - tx_start
-        print(f"Transaction data length: {tx_data_length}")
+        if tx_start >= len(raw_block):
+            raise ValueError(f"Block data is too short to contain transactions, block height: {height}")
         txs = cls.DESERIALIZER(raw_block, start=tx_start).read_tx_block()
         return cls.Block(
             raw=raw_block,
@@ -2540,6 +2531,11 @@ class Pepepow(Dash):
             block_size=len(raw_block),
             height=height
         )
+
+    @classmethod
+    def block_header(cls, raw_block, height):
+        """Extract the block header from a block."""
+        return raw_block[:80]
 
     @classmethod
     def genesis_block(cls, header):
@@ -2583,7 +2579,6 @@ class Pepepow(Dash):
 
         # Steps 2-5: Apply other hash functions using ctypes
         # SIMD-512
-#        hash2 = bytearray(64)
         hash2 = (ctypes.c_ubyte * 64)()
         sph_simd.sph_simd512_init(ctypes.byref(ctx_simd))
         sph_simd.sph_simd512(ctypes.byref(ctx_simd), hash1, len(hash1))
@@ -2602,7 +2597,7 @@ class Pepepow(Dash):
         hash5 = (ctypes.c_ubyte * 64)()
         sph_shavite.sph_shavite512_init(ctypes.byref(ctx_shavite))
         sph_shavite.sph_shavite512(ctypes.byref(ctx_shavite), hash4, len(hash4))
-        sph_shavite.sph_shavite512_close(ctypes.byref(ctx_shavite), hash5)    
+        sph_shavite.sph_shavite512_close(ctypes.byref(ctx_shavite), hash5)
 
         # Steps 6-8: SHA-256 (three times)
         hash6 = hashlib.sha256(bytes(hash5)).digest()
@@ -2615,8 +2610,6 @@ class Pepepow(Dash):
     def xelisv2_hash(header):
         # Implement the XelisV2 hash function here
         pass
-
-
 
 class Xuez(Coin):
     NAME = "Xuez"
@@ -4364,3 +4357,4 @@ class FerriteTestnet(Ferrite):
         'enode2.ferritecoin.org s t',
         'enode3.ferritecoin.org s t',
     ]
+
