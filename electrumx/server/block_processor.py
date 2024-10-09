@@ -867,3 +867,105 @@ class LTORBlockProcessor(BlockProcessor):
                 add_touched(hashX)
 
         self.tx_count -= len(txs)
+
+from aiorpcx import TaskGroup
+import asyncio
+import struct
+
+from electrumx.server.block_processor import BlockProcessor
+from electrumx.lib.hash import hash_to_hex_str
+from electrumx.lib.util import chunks
+from electrumx.lib.tx import Deserializer
+from electrumx.server.daemon import Daemon
+from electrumx.server.db import DB
+
+
+class PepepowBlockProcessor(BlockProcessor):
+    def __init__(self, env, db, daemon, notifications):
+        super().__init__(env, db, daemon, notifications)
+        self.coin = env.coin  # Ensure the coin class is properly loaded
+
+    async def fetch_and_process_blocks(self, caught_up_event, height, count):
+        """Fetch count blocks starting at the given height, and process them."""
+        daemon = self.daemon
+        blocks = []
+        bad_blocks = []
+        first = height
+
+        try:
+            hex_hashes = await daemon.block_hex_hashes(first, count)
+            if not hex_hashes:
+                self.logger.warning(f'failed to fetch block hashes starting at height {first:,d}')
+                return
+
+            for hex_hash in hex_hashes:
+                raw_block = await daemon.raw_block(hex_hash)
+                if not raw_block:
+                    self.logger.error(f'failed to fetch block {hex_hash} at height {height:,d}')
+                    bad_blocks.append(hex_hash)
+                else:
+                    blocks.append((raw_block, height))
+                height += 1
+
+            if bad_blocks:
+                self.logger.error(f'bad blocks at heights: {bad_blocks}')
+        except Exception as e:
+            self.logger.error(f'exception while fetching blocks: {str(e)}')
+
+        if not blocks:
+            return
+
+        async with TaskGroup() as group:
+            for raw_block, height in blocks:
+                await group.spawn(self.check_and_advance_blocks, raw_block, height)
+
+    async def check_and_advance_blocks(self, raw_block, height):
+        """Check a block's integrity and advance the block processor."""
+        coin = self.coin
+        try:
+            block = coin.block(raw_block, height)
+        except Exception as e:
+            self.logger.error(f"Error processing block at height {height}: {str(e)}")
+            return
+
+        if block.header[:32] == b'\x00' * 32:
+            self.logger.error(f'genesis block at height {height} is invalid')
+            return
+
+        await self.advance_blocks([block], self.advance_height)
+        self.logger.info(f'Processed block at height {height:,d}')
+
+    async def advance_blocks(self, blocks, advance_height):
+        """Advance the chain's height."""
+        async with TaskGroup() as group:
+            for block in blocks:
+                await group.spawn(self.apply_block, block, advance_height)
+
+    async def apply_block(self, block, advance_height):
+        """Apply a block to the database and advance height."""
+        header = block.header
+        height = block.height
+        try:
+            await self.db.apply_block(block)
+            advance_height(height + 1)
+            self.logger.info(f'Applied block at height {height:,d}')
+        except Exception as e:
+            self.logger.error(f'Failed to apply block at height {height}: {str(e)}')
+
+    async def rollback_to(self, height):
+        """Roll back to a given height."""
+        await self.db.rollback_to(height)
+        self.advance_height(height)
+        self.logger.info(f'Rolled back to height {height:,d}')
+
+    async def reorg_to_height(self, height):
+        """Reorganize to a given height."""
+        reorg_height = await self.db.reorg_to_height(height)
+        self.advance_height(reorg_height)
+        self.logger.info(f'Reorganized to height {reorg_height:,d}')
+
+    def advance_height(self, height):
+        """Advance the chain's height."""
+        self.height = height
+        self.tip = self.db.read_tip()
+        self.logger.info(f'Advanced to height {height:,d}')

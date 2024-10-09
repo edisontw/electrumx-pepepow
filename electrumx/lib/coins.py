@@ -2494,8 +2494,18 @@ class AxeRegtest(AxeTestnet):
     RPC_PORT = 19869
     TX_COUNT = 1
 
+from electrumx.server.daemon import Daemon
+import logging
+class PepepowDaemon(Daemon):
+    async def block_hex_str(self, hex_hash):
+        verbosity_param = 0  # or 'false' depending on your daemon's requirement
+        self.logger.info(f"Debug: Calling getblock with params: [{hex_hash}, {verbosity_param}]")
+        result = await self._send_single('getblock', [hex_hash, verbosity_param])
+        self.logger.info(f"Debug: Received block data of length {len(result)}")
+        return result
+
 from .tx_pepepow import DeserializerPepepow
-class Pepepow(Dash):
+class Pepepow(Coin):
     NAME = "PEPEPOW"
     SHORTNAME = "PEPEW"
     NET = "mainnet"
@@ -2511,19 +2521,36 @@ class Pepepow(Dash):
     TX_PER_BLOCK = 3  # Transactions per block, estimated value
     RPC_PORT = 8332  # RPC service port
     SESSIONCLS = DashElectrumX
-    DAEMON = daemon.DashDaemon
+#    DAEMON = daemon.DashDaemon
+    DAEMON = PepepowDaemon
 
     @classmethod
     def block(cls, raw_block, height):
         if isinstance(raw_block, str):
+            print(f"Debug: raw_block (height {height}): {raw_block}")
             raw_block = bytes.fromhex(raw_block)
+        else:
+            print(f"Debug: raw_block (height {height}): {raw_block.hex()}")
         if len(raw_block) < 80:
-            raise ValueError(f"Block data is too short to contain a valid header, block height: {height}")
+            print(f"Debug: raw_block (height {height}): {raw_block}")
+            raise ValueError(f"Block data is too short to contain a valid header {raw_block.hex()}, block height: {height}")
         header = cls.block_header(raw_block, height)
         tx_start = len(header)
         if tx_start >= len(raw_block):
+            # If this is the genesis block, handle it specifically
+            if height == 0:
+                return cls.Block(
+                    raw=raw_block,
+                    header=header,
+                    transactions=[],
+                    block_size=len(raw_block),
+                    height=height
+                )
             raise ValueError(f"Block data is too short to contain transactions, block height: {height}")
-        txs = cls.DESERIALIZER(raw_block, start=tx_start).read_tx_block()
+        try:
+            txs = cls.DESERIALIZER(raw_block, start=tx_start).read_tx_block()
+        except Exception as e:
+            raise ValueError(f"Error deserializing transactions at block height: {height}, error: {str(e)}")
         return cls.Block(
             raw=raw_block,
             header=header,
