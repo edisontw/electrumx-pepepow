@@ -24,6 +24,22 @@ Electrum server network runs ElectrumX.
 
 See [readthedocs](https://electrumx-spesmilo.readthedocs.io).
 
+### PEPEPOW
+
+This fork includes a `PEPEPOW` mainnet coin integration (`NET=mainnet`,
+`RPC_PORT=8833`) with strict PoW hashing compatibility:
+
+- Legacy memehash path via native SPH shared libraries:
+  `libsph_blake.so`, `libsph_simd.so`, `libsph_echo.so`,
+  `libsph_cubehash.so`, `libsph_shavite.so`
+- Xelis v2 path via Python implementation requiring `blake3`
+
+Install the optional dependency with:
+
+```
+pip install 'e-x[pepepow]'
+```
+
 ### Releases
 
 ElectrumX is generally mature software and usually running git HEAD in production is fine.

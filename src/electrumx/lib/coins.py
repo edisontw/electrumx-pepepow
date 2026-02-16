@@ -46,6 +46,8 @@ import electrumx.lib.tx as lib_tx
 from electrumx.lib.tx import Tx
 import electrumx.lib.tx_dash as lib_tx_dash
 import electrumx.lib.tx_axe as lib_tx_axe
+import electrumx.lib.tx_pepepow as lib_tx_pepepow
+import electrumx.lib.pepepow_hash as lib_pepepow_hash
 import electrumx.server.block_processor as block_proc
 import electrumx.server.daemon as daemon
 from electrumx.server.session import (ElectrumX, DashElectrumX,
@@ -141,6 +143,11 @@ class Coin:
                     )
                 return coin
         raise CoinError(f'unknown coin {name} and network {net} combination')
+
+    @classmethod
+    def all_coins(cls):
+        '''Return all known coin classes.'''
+        return list(util.subclasses(cls))
 
     @classmethod
     def sanitize_url(cls, url):
@@ -2489,6 +2496,32 @@ class AxeRegtest(AxeTestnet):
     TX_COUNT_HEIGHT = 1
     RPC_PORT = 19869
     TX_COUNT = 1
+
+
+class Pepepow(Coin):
+    NAME = "PEPEPOW"
+    SHORTNAME = "PEPEW"
+    NET = "mainnet"
+    XPUB_VERBYTES = bytes.fromhex("0488b21e")
+    XPRV_VERBYTES = bytes.fromhex("0488ade4")
+    P2PKH_VERBYTE = bytes.fromhex("37")
+    P2SH_VERBYTES = (bytes.fromhex("10"),)
+    WIF_BYTE = bytes.fromhex("cc")
+    GENESIS_HASH = ('00000a308cc3b469703a3bc1aa55bc25'
+                    '1a71c9287d7b413242592c0ab0a31f13')
+    SESSIONCLS = DashElectrumX
+    DAEMON = daemon.DashDaemon
+    DESERIALIZER = lib_tx_pepepow.DeserializerPepepow
+    TX_COUNT = 1000000
+    TX_COUNT_HEIGHT = 2070401
+    TX_PER_BLOCK = 3
+    RPC_PORT = 8833
+    REORG_LIMIT = 1000
+    PEERS = []
+
+    @classmethod
+    def header_hash(cls, header):
+        return lib_pepepow_hash.pepepow_header_hash(header)
 
 
 class Xuez(Coin):
