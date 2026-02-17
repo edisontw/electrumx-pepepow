@@ -30,6 +30,7 @@ Anything coin-specific should go in this file and be subclassed where
 necessary for appropriate handling.
 '''
 import re
+import inspect
 import struct
 from dataclasses import dataclass
 from decimal import Decimal
@@ -169,13 +170,38 @@ class Coin:
         return 100
 
     @classmethod
+    def _header_hash_accepts_height(cls):
+        accepts_height = cls.__dict__.get('_CACHED_HEADER_HASH_ACCEPTS_HEIGHT')
+        if accepts_height is not None:
+            return accepts_height
+
+        try:
+            params = tuple(inspect.signature(cls.header_hash).parameters.values())
+        except (TypeError, ValueError):
+            params = ()
+
+        accepts_height = (
+            len(params) >= 2
+            or any(param.kind == inspect.Parameter.VAR_POSITIONAL for param in params)
+            or any(param.kind == inspect.Parameter.VAR_KEYWORD for param in params)
+        )
+        cls._CACHED_HEADER_HASH_ACCEPTS_HEIGHT = accepts_height
+        return accepts_height
+
+    @classmethod
+    def header_hash_for_height(cls, header, height=None):
+        if height is not None and cls._header_hash_accepts_height():
+            return cls.header_hash(header, height)
+        return cls.header_hash(header)
+
+    @classmethod
     def genesis_block(cls, block):
         '''Check the Genesis block is the right one for this coin.
 
         Return the block less its unspendable coinbase.
         '''
         header = cls.block_header(block, 0)
-        header_hex_hash = hash_to_hex_str(cls.header_hash(header))
+        header_hex_hash = hash_to_hex_str(cls.header_hash_for_height(header, 0))
         if header_hex_hash != cls.GENESIS_HASH:
             raise CoinError(f'genesis block has hash {header_hex_hash} '
                             f'expected {cls.GENESIS_HASH}')
@@ -2517,10 +2543,15 @@ class Pepepow(Coin):
     TX_PER_BLOCK = 3
     RPC_PORT = 8833
     REORG_LIMIT = 1000
+    XELISV2_CUTOVER_HEIGHT = 1_930_000
     PEERS = []
 
     @classmethod
-    def header_hash(cls, header):
+    def header_hash(cls, header, height=None):
+        if height is not None:
+            if height < cls.XELISV2_CUTOVER_HEIGHT:
+                return lib_pepepow_hash.pepepow_memehash(header)
+            return lib_pepepow_hash.pepepow_xelisv2_hash(header)
         return lib_pepepow_hash.pepepow_header_hash(header)
 
 

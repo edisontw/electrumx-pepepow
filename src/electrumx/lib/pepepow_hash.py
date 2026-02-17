@@ -111,9 +111,11 @@ def pepepow_memehash(header: bytes) -> bytes:
     hash4 = _run_sph_512('cubehash', hash3)
     hash5 = _run_sph_512('shavite', hash4)
 
+    # Match core's pepe_hash pipeline: each follow-up SHA256 step hashes a
+    # uint512 buffer where the 32-byte digest is zero-padded to 64 bytes.
     hash6 = hashlib.sha256(hash5).digest()
-    hash7 = hashlib.sha256(hash6).digest()
-    hash8 = hashlib.sha256(hash7).digest()
+    hash7 = hashlib.sha256(hash6 + bytes(32)).digest()
+    hash8 = hashlib.sha256(hash7 + bytes(32)).digest()
     return hash8
 
 
@@ -538,4 +540,3 @@ def pepepow_header_hash(header: bytes) -> bytes:
     if version & 0x8000:
         return pepepow_xelisv2_hash(data)
     return pepepow_memehash(data)
-

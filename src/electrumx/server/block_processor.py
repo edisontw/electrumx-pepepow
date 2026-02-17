@@ -232,7 +232,10 @@ class BlockProcessor:
                   for n, raw_block in enumerate(raw_blocks)]
         headers = [block.header for block in blocks]
         hprevs = [self.coin.header_prevhash(h) for h in headers]
-        chain = [self.tip] + [self.coin.header_hash(h) for h in headers[:-1]]
+        chain = [self.tip] + [
+            self.coin.header_hash_for_height(header, first + n)
+            for n, header in enumerate(headers[:-1])
+        ]
 
         if hprevs == chain:
             start = time.monotonic()
@@ -424,7 +427,7 @@ class BlockProcessor:
         headers = [block.header for block in blocks]
         self.height = height
         self.headers += headers
-        self.tip = self.coin.header_hash(headers[-1])
+        self.tip = self.coin.header_hash_for_height(headers[-1], self.height)
         self.tip_advanced_event.set()
         self.tip_advanced_event.clear()
 
@@ -499,7 +502,7 @@ class BlockProcessor:
         for raw_block in raw_blocks:
             # Check and update self.tip
             block = coin.block(raw_block, self.height)
-            header_hash = coin.header_hash(block.header)
+            header_hash = coin.header_hash_for_height(block.header, self.height)
             if header_hash != self.tip:
                 raise ChainError(
                     f'backup block {hash_to_hex_str(header_hash)} not tip '
