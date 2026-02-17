@@ -40,6 +40,21 @@ Install the optional dependency with:
 pip install 'e-x[pepepow]'
 ```
 
+### Dev/Test (PEPEPOW smoke)
+
+Use this lightweight workflow for PEPEPOW-focused checks. This does not attempt
+to satisfy all optional altcoin dependencies needed by the full upstream suite.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install -U pytest pytest-asyncio anyio
+pip install -e ".[pepepow,test]"
+
+PYTHONPATH=src pytest -q tests/lib/test_pepepow.py
+```
+
 ### Releases
 
 ElectrumX is generally mature software and usually running git HEAD in production is fine.

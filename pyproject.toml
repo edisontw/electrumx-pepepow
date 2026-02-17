@@ -46,6 +46,11 @@ version = { attr = 'electrumx.__version__' }
 dev = [
     "objgraph",
 ]
+test = [
+    "pytest>=7",
+    "pytest-asyncio",
+    "anyio",
+]
 rocksdb = [
     "python-rocksdb>=0.6.9",
     "Cython<3.0",
@@ -68,3 +73,8 @@ xevan-hash = ["xevan-hash", ]
 dash_hash = ["dash_hash>=1.4", ]
 pepepow = ["blake3>=0.4.1", ]
 zny-yespower-0-5 = ["zny-yespower-0-5", ]
+
+[tool.pytest.ini_options]
+markers = [
+    "asyncio: mark a test as asyncio",
+]
