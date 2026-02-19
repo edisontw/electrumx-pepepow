@@ -2547,6 +2547,13 @@ class Pepepow(Coin):
     PEERS = []
 
     @classmethod
+    def max_fetch_blocks(cls, height):
+        # Single-vCPU nodes can starve daemon RPC under large batch fetches.
+        if height < 130000:
+            return 200
+        return 20
+
+    @classmethod
     def header_hash(cls, header, height=None):
         if height is not None:
             if height < cls.XELISV2_CUTOVER_HEIGHT:

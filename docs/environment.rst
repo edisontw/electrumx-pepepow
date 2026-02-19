@@ -49,6 +49,10 @@ These environment variables are always required:
    connections you must set :envvar:`SERVICES`, and for others to be aware of your server
    set :envvar:`REPORT_SERVICES`.
 
+.. note:: For PEPEPOW-specific deployment tuning (recommended ``PEPEPOW.conf`` values,
+   ElectrumX runtime profile, and validation workflow), see
+   :ref:`pepepow_deployment`.
+
 
 For the ``run`` script
 ======================
