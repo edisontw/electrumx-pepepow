@@ -65,7 +65,7 @@ Notes:
 
 ## ElectrumX Runtime Profile (Single-Node / LAN)
 
-Recommended environment profile for a private or LAN deployment:
+Recommended environment profile for a private or LAN deployment`/etc/electrumx-pepepow.conf`:
 
 ```bash
 export COIN=PEPEPOW
@@ -84,8 +84,8 @@ export REORG_LIMIT=1000
 export MAX_SESSIONS=256
 export REQUEST_TIMEOUT=60
 export SESSION_TIMEOUT=600
-export DAEMON_POLL_INTERVAL_BLOCKS=5000
-export DAEMON_POLL_INTERVAL_MEMPOOL=5000
+#export DAEMON_POLL_INTERVAL_BLOCKS=5000
+#export DAEMON_POLL_INTERVAL_MEMPOOL=5000
 export LOG_LEVEL=info
 ```
 

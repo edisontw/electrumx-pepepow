@@ -210,6 +210,9 @@ class DB:
         self.logger.info(f'header merkle cache populated in {elapsed:.1f}s')
 
     async def header_branch_and_root(self, length, height):
+        if not self.header_mc.initialized.is_set():
+            hashes = await self.fs_block_hashes(0, length)
+            return await run_in_thread(self.merkle.branch_and_root, hashes, height)
         return await self.header_mc.branch_and_root(length, height)
 
     # Flushing
@@ -482,17 +485,21 @@ class DB:
         if headers_count != count:
             raise self.DBError(f'only got {headers_count:,d} headers starting '
                                f'at {height:,d}, not {count:,d}')
-        offset = 0
-        headers = []
-        for n in range(count):
-            hlen = self.header_len(height + n)
-            headers.append(headers_concat[offset:offset + hlen])
-            offset += hlen
 
-        return [
-            self.coin.header_hash_for_height(header, height + n)
-            for n, header in enumerate(headers)
-        ]
+        def block_hashes():
+            offset = 0
+            headers = []
+            for n in range(count):
+                hlen = self.header_len(height + n)
+                headers.append(headers_concat[offset:offset + hlen])
+                offset += hlen
+
+            return [
+                self.coin.header_hash_for_height(header, height + n)
+                for n, header in enumerate(headers)
+            ]
+
+        return await run_in_thread(block_hashes)
 
     async def limited_history(self, hashX, *, limit=1000):
         '''Return an unpruned, sorted list of (tx_hash, height) tuples of

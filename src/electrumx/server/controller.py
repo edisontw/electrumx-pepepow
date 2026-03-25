@@ -138,7 +138,13 @@ class Controller(ServerBase):
 
             async def wait_for_catchup():
                 await caught_up_event.wait()
-                await group.spawn(db.populate_header_merkle_cache())
+                if env.precache_header_merkle:
+                    await group.spawn(db.populate_header_merkle_cache())
+                else:
+                    self.logger.info(
+                        'header merkle cache prepopulation disabled; proofs '
+                        'will be computed on demand'
+                    )
                 await group.spawn(mempool.keep_synchronized(mempool_event))
 
             async with OldTaskGroup() as group:

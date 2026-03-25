@@ -2551,7 +2551,7 @@ class Pepepow(Coin):
         # Single-vCPU nodes can starve daemon RPC under large batch fetches.
         if height < 130000:
             return 200
-        return 20
+        return 40
 
     @classmethod
     def header_hash(cls, header, height=None):
