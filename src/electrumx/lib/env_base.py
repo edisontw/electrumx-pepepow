@@ -16,6 +16,9 @@ from electrumx.lib.util import class_logger
 class EnvBase:
     '''Wraps environment configuration.'''
 
+    _FALSE_STRINGS = {'', '0', 'false', 'no', 'off'}
+    _TRUE_STRINGS = {'1', 'true', 'yes', 'on'}
+
     class Error(Exception):
         pass
 
@@ -30,8 +33,15 @@ class EnvBase:
 
     @classmethod
     def boolean(cls, envvar, default):
-        default = 'Yes' if default else ''
-        return bool(cls.default(envvar, default).strip())
+        default = 'yes' if default else ''
+        value = cls.default(envvar, default)
+        normalized = value.strip().lower()
+        if normalized in cls._FALSE_STRINGS:
+            return False
+        if normalized in cls._TRUE_STRINGS:
+            return True
+        # Preserve historical behavior for unexpected non-empty values.
+        return bool(normalized)
 
     @classmethod
     def required(cls, envvar):

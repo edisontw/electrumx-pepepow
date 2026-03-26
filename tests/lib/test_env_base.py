@@ -12,6 +12,13 @@ os.environ.update({
     'intspace': ' 32 ',
     'true': 'x',
     'false': '',
+    'false_word': 'false',
+    'false_zero': '0',
+    'false_no': 'no',
+    'false_off': 'off',
+    'true_yes': 'yes',
+    'true_on': 'on',
+    'true_one': '1',
     'space': ' ',
 })
 
@@ -24,7 +31,14 @@ def test_boolean():
     e = EnvBase()
     assert e.boolean('true', False)
     assert not e.boolean('false', True)
+    assert not e.boolean('false_word', True)
+    assert not e.boolean('false_zero', True)
+    assert not e.boolean('false_no', True)
+    assert not e.boolean('false_off', True)
     assert not e.boolean('space', True)
+    assert e.boolean('true_yes', False)
+    assert e.boolean('true_on', False)
+    assert e.boolean('true_one', False)
     assert e.boolean('missing', True)
     assert not e.boolean('missing', False)
 

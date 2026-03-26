@@ -9,6 +9,7 @@
 '''Interface to the blockchain database.'''
 
 
+import asyncio
 from array import array
 import ast
 import os
@@ -124,6 +125,7 @@ class DB:
         # Header merkle cache
         self.merkle = Merkle()
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
+        self._header_mc_init_task = None
 
         # on-disk: raw block headers in chain order
         self.headers_file = util.LogicalFile('meta/headers', 2, 16000000)
@@ -203,16 +205,33 @@ class DB:
 
     async def populate_header_merkle_cache(self):
         self.logger.info('populating header merkle cache...')
-        length = max(1, self.db_height - self.env.reorg_limit)
         start = time.monotonic()
-        await self.header_mc.initialize(length)
+        await self._ensure_header_merkle_cache(max(1, self.db_height - self.env.reorg_limit))
         elapsed = time.monotonic() - start
         self.logger.info(f'header merkle cache populated in {elapsed:.1f}s')
 
+    async def _ensure_header_merkle_cache(self, length):
+        if self.header_mc.initialized.is_set():
+            return
+
+        init_length = max(length, max(1, self.db_height - self.env.reorg_limit))
+        task = self._header_mc_init_task
+        if task is None:
+            self.logger.info(
+                f'lazily initializing header merkle cache to height {init_length - 1:,d}'
+            )
+            task = asyncio.create_task(self.header_mc.initialize(init_length))
+            self._header_mc_init_task = task
+
+        try:
+            await task
+        except Exception:
+            if self._header_mc_init_task is task:
+                self._header_mc_init_task = None
+            raise
+
     async def header_branch_and_root(self, length, height):
-        if not self.header_mc.initialized.is_set():
-            hashes = await self.fs_block_hashes(0, length)
-            return await run_in_thread(self.merkle.branch_and_root, hashes, height)
+        await self._ensure_header_merkle_cache(length)
         return await self.header_mc.branch_and_root(length, height)
 
     # Flushing
