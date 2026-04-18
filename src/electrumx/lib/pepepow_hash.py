@@ -16,6 +16,7 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import math
+import os
 import struct
 from pathlib import Path
 from typing import Optional
@@ -35,6 +36,12 @@ _SPH_LIB_CANDIDATES = {
 }
 _SPH_LIB_HANDLES: dict[str, ctypes.CDLL] = {}
 _SPH_CTX_SIZE = 1024
+_PEPEPOW_HOOHASH_LIB = 'libhoohash_pepepow.so'
+_PEPEPOW_HOOHASH_ENV = 'PEPEPOW_HOOHASH_LIB'
+_HOOHASH_HASH_SIZE = 32
+_XELIS_V2_BIT = 0x8000
+_HOOHASH_V110_BIT = 0x4000
+_HOOHASH_LIB_HANDLE: Optional[ctypes.CDLL] = None
 
 
 def _load_sph_library(kind: str) -> ctypes.CDLL:
@@ -99,6 +106,41 @@ def _run_sph_512(kind: str, data: bytes) -> bytes:
     return bytes(out_buf)
 
 
+def _load_hoohash_library() -> ctypes.CDLL:
+    global _HOOHASH_LIB_HANDLE
+
+    if _HOOHASH_LIB_HANDLE is not None:
+        return _HOOHASH_LIB_HANDLE
+
+    module_dir = Path(__file__).resolve().parent
+    candidates = []
+
+    override = os.environ.get(_PEPEPOW_HOOHASH_ENV)
+    if override:
+        candidates.append(Path(override).expanduser())
+
+    candidates.append(module_dir / _PEPEPOW_HOOHASH_LIB)
+
+    for candidate in candidates:
+        if candidate.exists():
+            try:
+                _HOOHASH_LIB_HANDLE = ctypes.CDLL(str(candidate))
+                return _HOOHASH_LIB_HANDLE
+            except OSError as exc:  # pragma: no cover - system dependent
+                raise RuntimeError(
+                    f"Unable to load PEPEPOW Hoohash library '{candidate}': {exc}"
+                ) from exc
+
+    try:
+        _HOOHASH_LIB_HANDLE = ctypes.CDLL(_PEPEPOW_HOOHASH_LIB)
+        return _HOOHASH_LIB_HANDLE
+    except OSError as exc:
+        raise RuntimeError(
+            "Missing PEPEPOW Hoohash library. "
+            f"Set {_PEPEPOW_HOOHASH_ENV} or place '{_PEPEPOW_HOOHASH_LIB}' next to pepepow_hash.py."
+        ) from exc
+
+
 def pepepow_memehash(header: bytes) -> bytes:
     '''PEPEPOW legacy PoW hash (pre-Xelis v2 path).'''
     data = bytes(header)
@@ -117,6 +159,23 @@ def pepepow_memehash(header: bytes) -> bytes:
     hash7 = hashlib.sha256(hash6 + bytes(32)).digest()
     hash8 = hashlib.sha256(hash7 + bytes(32)).digest()
     return hash8
+
+
+def pepepow_hoohash_v110_hash(header: bytes) -> bytes:
+    '''PEPEPOW Hoohash v110 path.'''
+    data = bytes(header)
+    if len(data) != 80:
+        raise ValueError('PEPEPOW Hoohash header must be exactly 80 bytes')
+
+    lib = _load_hoohash_library()
+    hoohash = lib.hoohashv110
+    hoohash.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]
+    hoohash.restype = None
+
+    in_buf = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
+    out_buf = (ctypes.c_ubyte * _HOOHASH_HASH_SIZE)()
+    hoohash(ctypes.byref(in_buf), len(data), ctypes.byref(out_buf))
+    return bytes(out_buf)
 
 
 _XELIS_V2_INPUT_LEN = 112
@@ -537,6 +596,8 @@ def pepepow_header_hash(header: bytes) -> bytes:
         raise ValueError('PEPEPOW header must be at least 80 bytes')
 
     version = int.from_bytes(data[:4], 'little', signed=False)
-    if version & 0x8000:
+    if version & _HOOHASH_V110_BIT:
+        return pepepow_hoohash_v110_hash(data)
+    if version & _XELIS_V2_BIT:
         return pepepow_xelisv2_hash(data)
     return pepepow_memehash(data)

@@ -2544,6 +2544,7 @@ class Pepepow(Coin):
     RPC_PORT = 8833
     REORG_LIMIT = 1000
     XELISV2_CUTOVER_HEIGHT = 1_930_000
+    HOOHASHV110_CUTOVER_HEIGHT = 4_354_200
     PEERS = []
 
     @classmethod
@@ -2558,7 +2559,9 @@ class Pepepow(Coin):
         if height is not None:
             if height < cls.XELISV2_CUTOVER_HEIGHT:
                 return lib_pepepow_hash.pepepow_memehash(header)
-            return lib_pepepow_hash.pepepow_xelisv2_hash(header)
+            if height < cls.HOOHASHV110_CUTOVER_HEIGHT:
+                return lib_pepepow_hash.pepepow_xelisv2_hash(header)
+            return lib_pepepow_hash.pepepow_hoohash_v110_hash(header)
         return lib_pepepow_hash.pepepow_header_hash(header)
 
 
