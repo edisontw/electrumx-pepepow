@@ -4,24 +4,70 @@
 PEPEPOW Deployment Runbook
 ==========================
 
-This guide documents a production-oriented, single-node / LAN deployment model
-for running ElectrumX on PEPEPOW mainnet.
+This guide documents a production-oriented PEPEPOW ElectrumX deployment. It is
+written for operators who want a fast path from a synchronized PEPEPOW full node
+to a working ElectrumX service.
 
-It is aligned with the current codebase:
+Current deployment assumptions
+==============================
 
-* ``COIN=PEPEPOW``
-* ``RPC_PORT=8833``
-* ``REORG_LIMIT=1000``
-* ``XELISV2_CUTOVER_HEIGHT=1,930,000``
+The examples below use the following layout:
 
+.. list-table::
+   :header-rows: 1
 
-Architecture and Hash Cutover
+   * - Item
+     - Value
+   * - Repository
+     - ``/home/ubuntu/electrumx-pepepow``
+   * - Python venv
+     - ``/home/ubuntu/electrumx-pepepow/.venv``
+   * - ElectrumX server
+     - ``/home/ubuntu/electrumx-pepepow/.venv/bin/electrumx_server``
+   * - ElectrumX RPC client
+     - ``/home/ubuntu/electrumx-pepepow/.venv/bin/electrumx_rpc``
+   * - ElectrumX DB
+     - ``/var/lib/electrumx-pepepow``
+   * - systemd service
+     - ``/etc/systemd/system/electrumx.service``
+   * - systemd environment file
+     - ``/etc/electrumx-pepepow.conf``
+
+PEPEPOW port map
+================
+
+Do not confuse PEPEPOW P2P and JSON-RPC ports.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Port
+     - Service
+     - Purpose
+   * - ``8833``
+     - PEPEPOW daemon P2P
+     - Blockchain peer traffic
+   * - ``8834``
+     - PEPEPOW daemon RPC
+     - JSON-RPC endpoint used by ElectrumX ``DAEMON_URL``
+   * - ``50001``
+     - ElectrumX TCP
+     - Electrum wallet or application access
+   * - ``8000``
+     - ElectrumX LocalRPC
+     - Local admin RPC, such as ``getinfo`` and ``stop``
+
+``DAEMON_URL`` must use ``127.0.0.1:8834``. Port ``8833`` is the PEPEPOW P2P
+port and must not be used as the ElectrumX daemon RPC endpoint.
+
+Architecture and hash cutover
 =============================
 
 PEPEPOW block header hashing is dual-path:
 
-* Legacy path (before cutover): ``BLAKE512 -> SIMD512 -> ECHO512 -> CUBEHASH512 -> SHAVITE512 -> SHA256^3``
-* Xelis v2 path (from cutover onward): selected at height ``1,930,000``
+* Legacy path before cutover:
+  ``BLAKE512 -> SIMD512 -> ECHO512 -> CUBEHASH512 -> SHAVITE512 -> SHA256^3``
+* Xelis v2 path from height ``1,930,000`` onward
 
 The PEPEPOW hash implementation lives in:
 
@@ -36,14 +82,24 @@ SPH shared libraries required by the legacy path:
 * ``src/electrumx/lib/libsph_cubehash.so``
 * ``src/electrumx/lib/libsph_shavite.so``
 
+Install dependencies
+====================
+
+From the repository root:
+
+.. code-block:: bash
+
+   cd /home/ubuntu/electrumx-pepepow
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -U pip wheel setuptools
+   pip install -e ".[pepepow]"
 
 Recommended PEPEPOW.conf
 ========================
 
 ElectrumX quality is strongly coupled to PEPEPOW Core JSON-RPC stability and
-capacity. Use this baseline:
-As an operational rule, roughly 80% of ElectrumX stability depends on Core RPC
-keeping up.
+capacity. Use this PEPEPOW daemon baseline as a starting point:
 
 .. code-block:: ini
 
@@ -53,6 +109,8 @@ keeping up.
    rpcpassword=CHANGE_ME
    rpcbind=127.0.0.1
    rpcallowip=127.0.0.1
+   rpcport=8834
+   port=8833
 
    txindex=1
 
@@ -65,128 +123,237 @@ keeping up.
 Notes:
 
 * ``txindex=1`` is strongly recommended for ElectrumX reliability.
-* ``dbcache=768`` is a stable baseline; tune upward with RAM headroom.
-* Keep RPC local (``127.0.0.1``) unless you have a hardened, isolated RPC
+* Keep RPC local on ``127.0.0.1`` unless you have a hardened, isolated RPC
   network design.
+* ``dbcache=768`` is a stable baseline; tune upward with RAM headroom.
+* If ElectrumX logs repeated RPC timeouts, tune PEPEPOW Core RPC capacity first.
 
-
-Recommended ElectrumX Environment Profile
-=========================================
-
-For a single-node / LAN profile:
+Create the ElectrumX DB directory
+=================================
 
 .. code-block:: bash
 
-   export COIN=PEPEPOW
-   export NET=mainnet
-   export DB_DIRECTORY=/var/lib/electrumx-pepepow
-   export DAEMON_URL=http://<rpcuser>:<rpcpassword>@127.0.0.1:8833/
+   sudo mkdir -p /var/lib/electrumx-pepepow
+   sudo chown -R ubuntu:ubuntu /var/lib/electrumx-pepepow
+   sudo chmod 750 /var/lib/electrumx-pepepow
 
-   export SERVICES=tcp://127.0.0.1:50001,rpc://127.0.0.1:8000
-   export PEER_DISCOVERY=off
-   export PEER_ANNOUNCE=
-   export REPORT_SERVICES=
+Use a dedicated service user for hardened deployments when file ownership and
+permissions are ready. For small community servers, running as ``ubuntu`` may be
+acceptable during initial deployment because the repository, venv, and DB are
+usually already owned by that user.
 
-   export DB_ENGINE=leveldb
-   export CACHE_MB=1200
-   export REORG_LIMIT=1000
-   export MAX_SESSIONS=256
-   export REQUEST_TIMEOUT=60
-   export SESSION_TIMEOUT=600
-   export DAEMON_POLL_INTERVAL_BLOCKS=5000
-   export DAEMON_POLL_INTERVAL_MEMPOOL=5000
-   export LOG_LEVEL=info
+Create the ElectrumX environment file
+=====================================
 
-Rationale by key setting:
+Create ``/etc/electrumx-pepepow.conf``.
 
-* ``SERVICES`` binds both Electrum TCP and LocalRPC to localhost for private
-  operations.
-* ``PEER_DISCOVERY=off`` and empty ``REPORT_SERVICES`` disable public peer
-  advertisement in private mode.
-* ``CACHE_MB=1200`` is a balanced default for sync + serving.
-* ``MAX_SESSIONS=256`` avoids unnecessary file/socket pressure for LAN-only
-  access.
-* ``REQUEST_TIMEOUT=60`` tolerates heavy daemon calls while still failing fast
-  under saturation.
-* Poll intervals at ``5000`` ms avoid over-polling daemon RPC.
+This file is read by systemd through ``EnvironmentFile=``. Use plain
+``KEY=value`` lines. Do not use ``export``.
 
+.. code-block:: ini
 
-Capacity and Memory Notes
+   COIN=PEPEPOW
+   NET=mainnet
+   DB_DIRECTORY=/var/lib/electrumx-pepepow
+   DAEMON_URL=http://<rpcuser>:<rpcpassword>@127.0.0.1:8834/
+
+   SERVICES=tcp://0.0.0.0:50001,rpc://127.0.0.1:8000
+   PEER_DISCOVERY=off
+   PEER_ANNOUNCE=
+   REPORT_SERVICES=
+
+   DB_ENGINE=leveldb
+   CACHE_MB=1200
+   REORG_LIMIT=1000
+   MAX_SESSIONS=256
+   REQUEST_TIMEOUT=60
+   SESSION_TIMEOUT=600
+   LOG_LEVEL=info
+   PRECACHE_HEADER_MERKLE=false
+
+Secure the file because it contains RPC credentials:
+
+.. code-block:: bash
+
+   sudo chown ubuntu:ubuntu /etc/electrumx-pepepow.conf
+   sudo chmod 600 /etc/electrumx-pepepow.conf
+
+A template is available at:
+
+.. code-block:: text
+
+   contrib/pepepow/electrumx-pepepow.conf.example
+
+Create the systemd service
+==========================
+
+Create ``/etc/systemd/system/electrumx.service``:
+
+.. code-block:: ini
+
+   [Unit]
+   Description=PEPEPOW ElectrumX Server
+   After=network-online.target
+   Wants=network-online.target
+
+   [Service]
+   Type=simple
+   User=ubuntu
+   Group=ubuntu
+   WorkingDirectory=/home/ubuntu/electrumx-pepepow
+   EnvironmentFile=/etc/electrumx-pepepow.conf
+   ExecStart=/home/ubuntu/electrumx-pepepow/.venv/bin/electrumx_server
+   ExecStop=/home/ubuntu/electrumx-pepepow/.venv/bin/electrumx_rpc -p 8000 stop
+   Restart=always
+   RestartSec=10
+   TimeoutStopSec=120
+   LimitNOFILE=65535
+
+   [Install]
+   WantedBy=multi-user.target
+
+A template is available at:
+
+.. code-block:: text
+
+   contrib/pepepow/electrumx.service.example
+
+Validate and start the service
+==============================
+
+.. code-block:: bash
+
+   sudo systemctl daemon-reload
+   sudo systemd-analyze verify /etc/systemd/system/electrumx.service
+   sudo systemctl enable electrumx
+   sudo systemctl restart electrumx
+   sudo systemctl status electrumx --no-pager -l
+
+Check that the expected ports are listening:
+
+.. code-block:: bash
+
+   sudo ss -lntp | egrep ':8833|:8834|:8000|:50001'
+
+Expected roles:
+
+* ``8833``: PEPEPOW daemon P2P
+* ``8834``: PEPEPOW daemon RPC
+* ``50001``: ElectrumX TCP
+* ``8000``: ElectrumX LocalRPC
+
+Verification workflow
+=====================
+
+Check ElectrumX runtime state:
+
+.. code-block:: bash
+
+   /home/ubuntu/electrumx-pepepow/.venv/bin/electrumx_rpc -p 8000 getinfo
+
+Healthy output should show:
+
+* ``daemon height`` equal or close to ``db height``
+* ``uptime`` increasing
+* ``db_flush_count`` far below ``65535``
+* ``version`` equal to the expected ElectrumX version
+
+Monitor sync height:
+
+.. code-block:: bash
+
+   watch -n 10 '/home/ubuntu/electrumx-pepepow/.venv/bin/electrumx_rpc -p 8000 getinfo | egrep "daemon height|db height|db_flush_count|uptime"'
+
+Verify header hashes against PEPEPOW Core:
+
+.. code-block:: bash
+
+   python contrib/pepepow/verify_block_hashes.py --help
+
+Run Electrum protocol smoke checks:
+
+.. code-block:: bash
+
+   python contrib/pepepow/electrum_smoke.py --help
+
+Run PEPEPOW transaction parser smoke checks:
+
+.. code-block:: bash
+
+   python contrib/pepepow/tx_parser_smoke.py --help
+
+Service exposure options
+========================
+
+Private or LAN-only deployment:
+
+.. code-block:: ini
+
+   SERVICES=tcp://127.0.0.1:50001,rpc://127.0.0.1:8000
+
+Public Electrum TCP deployment:
+
+.. code-block:: ini
+
+   SERVICES=tcp://0.0.0.0:50001,rpc://127.0.0.1:8000
+
+Keep ``rpc://127.0.0.1:8000`` local-only. Do not expose ElectrumX LocalRPC to the
+public internet.
+
+Capacity and memory notes
 =========================
 
 PEPEPOW Core and ElectrumX share host resources. Tune both sides together:
 
 * PEPEPOW Core ``dbcache`` controls daemon-side index/cache pressure.
-* ElectrumX ``CACHE_MB`` controls address/UTXO/history cache behavior.
+* ElectrumX ``CACHE_MB`` controls address, UTXO, and history cache behavior.
 
-Practical sizing:
+Practical starting values:
 
-* Start with ``dbcache=768`` and ``CACHE_MB=1200``.
-* Keep ElectrumX cache below roughly 60% of system RAM.
-* If sync stalls with frequent RPC timeouts, increase Core RPC capacity first
-  (``rpcthreads``, ``rpcworkqueue``, ``dbcache``), then revisit ElectrumX.
+* PEPEPOW Core ``dbcache=768``
+* ElectrumX ``CACHE_MB=1200``
+* ElectrumX ``MAX_SESSIONS=256``
+* ElectrumX ``REQUEST_TIMEOUT=60``
 
+If sync stalls with frequent RPC timeouts, increase Core RPC capacity first
+(``rpcthreads``, ``rpcworkqueue``, ``dbcache``), then revisit ElectrumX.
 
-Verification Workflow
-=====================
-
-1. Start ElectrumX:
-
-   .. code-block:: bash
-
-      electrumx_server
-
-2. Check server state:
-
-   .. code-block:: bash
-
-      electrumx_rpc -p 8000 getinfo
-
-3. Verify header hashes against PEPEPOW core:
-
-   .. code-block:: bash
-
-      python contrib/pepepow/verify_block_hashes.py --help
-
-4. Run Electrum protocol smoke checks:
-
-   .. code-block:: bash
-
-      python contrib/pepepow/electrum_smoke.py --help
-
-5. Run PEPEPOW transaction parser smoke checks:
-
-   .. code-block:: bash
-
-      python contrib/pepepow/tx_parser_smoke.py --help
-
-
-Troubleshooting Matrix
+Troubleshooting matrix
 ======================
 
 .. list-table::
    :header-rows: 1
 
    * - Symptom
-     - Likely Cause
+     - Likely cause
      - Action
-   * - Slow initial sync or repeated timeout logs
-     - Core RPC saturation
-     - Increase ``rpcthreads`` and ``rpcworkqueue``; verify ``txindex=1``; raise
-       ``dbcache`` with RAM headroom.
+   * - ``systemctl start electrumx`` fails with missing environment file
+     - ``EnvironmentFile`` points to the wrong path
+     - Use ``EnvironmentFile=/etc/electrumx-pepepow.conf`` and run
+       ``sudo systemctl daemon-reload``.
+   * - ``systemd-analyze verify`` says binary does not exist
+     - ``ExecStart`` points outside the venv
+     - Use ``/home/ubuntu/electrumx-pepepow/.venv/bin/electrumx_server``.
+   * - ElectrumX cannot connect to daemon
+     - Wrong ``DAEMON_URL`` port or credentials
+     - Confirm that ``DAEMON_URL`` uses ``127.0.0.1:8834`` and matches
+       ``rpcuser`` / ``rpcpassword``.
    * - ElectrumX lags daemon height
      - RPC backlog or insufficient daemon cache
-     - Check ``electrumx_rpc getinfo`` and daemon load; tune Core first, then
-       revisit ``CACHE_MB``.
-   * - Frequent client request timeouts
+     - Check ``getinfo``, daemon load, and Core RPC settings.
+   * - Repeated client request timeouts
      - Busy daemon under concurrent requests
-     - Keep LAN profile defaults; increase Core RPC capacity; raise
-       ``REQUEST_TIMEOUT`` only when required.
+     - Increase Core RPC capacity; raise ``REQUEST_TIMEOUT`` only when required.
    * - Startup failure loading PEPEPOW hashes
      - Missing SPH shared objects or missing ``blake3`` dependency
-     - Verify all ``libsph_*.so`` files and install
+     - Verify all ``libsph_*.so`` files and install with
        ``pip install -e ".[pepepow]"``.
-   * - Unexpected reorg handling limits
-     - Inconsistent ``REORG_LIMIT`` override
-     - Keep ``REORG_LIMIT=1000`` unless you have chain-specific reasons to
-       change it.
+   * - Crash near ``db_flush_count`` 65535
+     - ElectrumX history DB flush counter overflow risk
+     - Stop service and perform compaction before the counter approaches the limit.
+
+Daily maintenance
+=================
+
+See :ref:`pepepow_operations` for daily monitoring commands, log checks,
+compaction notes, backup recommendations, and application usage examples.
