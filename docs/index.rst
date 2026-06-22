@@ -5,8 +5,9 @@ ElectrumX for PEPEPOW
 This project is based on `kyuupichan/electrumx <https://github.com/kyuupichan/electrumx>`_
 and maintained for PEPEPOW deployment and operations.
 
-ElectrumX allows users to run their own Electrum server. It connects to a full
-node and indexes the blockchain, allowing efficient querying of address history.
+ElectrumX allows users to run their own Electrum server. This PEPEPOW fork
+connects to a PEPEPOW full node, indexes the blockchain, and provides Electrum
+protocol access for wallets and applications.
 
 The current version is |release|.
 
@@ -20,17 +21,10 @@ The PEPEPOW-maintained repository is hosted on GitHub:
 This fork focuses on PEPEPOW mainnet integration, deployment examples,
 operations documentation, and PEPEPOW-specific smoke checks.
 
-License
-=======
+Core Guides
+===========
 
-Python version at least 3.10 is required.
-
-The code is released under the MIT Licence.
-
-Getting Started
-===============
-
-For PEPEPOW operators, start with these guides:
+For PEPEPOW operators, these are the only required docs:
 
 * :ref:`pepepow_deployment` for initial setup and systemd deployment.
 * :ref:`pepepow_operations` for maintenance, monitoring, troubleshooting, and
@@ -40,14 +34,10 @@ Documentation
 =============
 
 .. toctree::
+   :maxdepth: 2
 
-   HOWTO
    pepepow_deployment
    pepepow_operations
-   environment
-   protocol
-   peer_discovery
-   rpc-interface
 
 Indices and tables
 ==================
