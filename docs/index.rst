@@ -24,11 +24,13 @@ operations documentation, and PEPEPOW-specific smoke checks.
 Core Guides
 ===========
 
-For PEPEPOW operators, these are the only required docs:
+For PEPEPOW operators, these are the required docs:
 
 * :ref:`pepepow_deployment` for initial setup and systemd deployment.
 * :ref:`pepepow_operations` for maintenance, monitoring, troubleshooting, and
   application usage.
+* :ref:`pepepow_header_verification` for validating ElectrumX headers against
+  PEPEPOW Core using PEPEPOW-specific block hashing.
 
 Documentation
 =============
@@ -38,6 +40,7 @@ Documentation
 
    pepepow_deployment
    pepepow_operations
+   pepepow_header_verification
 
 Indices and tables
 ==================
