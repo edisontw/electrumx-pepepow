@@ -1,0 +1,20 @@
+[Unit]
+Description=PEPEPOW ElectrumX Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/electrumx-pepepow
+EnvironmentFile=/etc/electrumx-pepepow.conf
+ExecStart=/home/ubuntu/electrumx-pepepow/.venv/bin/electrumx_server
+ExecStop=/home/ubuntu/electrumx-pepepow/.venv/bin/electrumx_rpc -p 8000 stop
+Restart=always
+RestartSec=10
+TimeoutStopSec=120
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
