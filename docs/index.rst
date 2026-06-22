@@ -2,11 +2,6 @@
 ElectrumX for PEPEPOW
 =====================
 
-.. image:: https://api.cirrus-ci.com/github/spesmilo/electrumx.svg?branch=master
-    :target: https://cirrus-ci.com/github/spesmilo/electrumx
-.. image:: https://coveralls.io/repos/github/spesmilo/electrumx/badge.svg
-    :target: https://coveralls.io/github/spesmilo/electrumx
-
 This project is based on `kyuupichan/electrumx <https://github.com/kyuupichan/electrumx>`_
 and maintained for PEPEPOW deployment and operations.
 
@@ -18,30 +13,28 @@ The current version is |release|.
 Source Code
 ===========
 
-The project is hosted on `GitHub
-<https://github.com/spesmilo/electrumx/>`_.  and uses `Cirrus CI
-<https://cirrus-ci.com/github/spesmilo/electrumx>`_ for Continuous
-Integration.
+The PEPEPOW-maintained repository is hosted on GitHub:
 
-Please submit an issue on the `bug tracker
-<https://github.com/spesmilo/electrumx/issues>`_ if you have found a
-bug or have a suggestion to improve the server.
+* `edisontw/electrumx-pepepow <https://github.com/edisontw/electrumx-pepepow>`_
+
+This fork focuses on PEPEPOW mainnet integration, deployment examples,
+operations documentation, and PEPEPOW-specific smoke checks.
 
 License
 =======
 
 Python version at least 3.10 is required.
 
-The code is released under the `MIT Licence
-<https://github.com/spesmilo/electrumx/LICENCE>`_.
+The code is released under the MIT Licence.
 
 Getting Started
 ===============
 
-See :ref:`HOWTO`.
+For PEPEPOW operators, start with these guides:
 
-For this repository, prioritize the PEPEPOW deployment runbook and runtime
-configuration references below.
+* :ref:`pepepow_deployment` for initial setup and systemd deployment.
+* :ref:`pepepow_operations` for maintenance, monitoring, troubleshooting, and
+  application usage.
 
 Documentation
 =============
@@ -50,6 +43,7 @@ Documentation
 
    HOWTO
    pepepow_deployment
+   pepepow_operations
    environment
    protocol
    peer_discovery
