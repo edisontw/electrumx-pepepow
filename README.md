@@ -17,6 +17,10 @@ The PEPEPOW implementation uses dual PoW header hashing:
   `BLAKE512 -> SIMD512 -> ECHO512 -> CUBEHASH512 -> SHAVITE512 -> SHA256^3`
 - Xelis v2 path after height `1,930,000` (`XELISV2_CUTOVER_HEIGHT`)
 
+PEPEPOW block hashes are **not** Bitcoin-style double-SHA256 hashes. Header
+verification must use the PEPEPOW-specific `Pepepow.header_hash_for_height()`
+logic so the correct hashing path is selected for the block height.
+
 Shipped SPH shared libraries required by the legacy path:
 
 - `src/electrumx/lib/libsph_blake.so`
@@ -166,8 +170,18 @@ Run PEPEPOW smoke and consistency checks:
 
 ```bash
 python contrib/pepepow/verify_block_hashes.py --help
+python contrib/pepepow/verify_electrum_tcp_headers.py --help
 python contrib/pepepow/electrum_smoke.py --help
 python contrib/pepepow/tx_parser_smoke.py --help
+```
+
+Verify Electrum TCP headers against PEPEPOW Core block hashes:
+
+```bash
+python contrib/pepepow/verify_electrum_tcp_headers.py \
+  --cli /home/ubuntu/PEPEPOW-cli \
+  --include-fixed \
+  --samples 30
 ```
 
 Run PEPEPOW-focused tests:
